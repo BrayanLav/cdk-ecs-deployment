@@ -1,0 +1,19 @@
+# CDK
+cdk.out/
+node_modules/
+*.js
+!jest.config.js
+*.d.ts
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Secrets
+.env
+*.pem
