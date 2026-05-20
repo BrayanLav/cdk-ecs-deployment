@@ -120,7 +120,137 @@ const vpc = new ec2.Vpc(this, 'MyVpc', { maxAzs: 2 });
 
 ---
 
-## Paso 3: Instalar herramientas
+## Paso 3: Entender la estructura del proyecto CDK
+
+Abre la carpeta `cdk-ecs-deployment/` en tu terminal. Esta es la estructura:
+
+```
+cdk-ecs-deployment/          ← RAÍZ DEL PROYECTO (abrir terminal aquí)
+│
+├── bin/
+│   └── app.ts               ← ENTRY POINT: aquí arranca CDK
+│
+├── lib/
+│   ├── network-stack.ts     ← Stack 1: crea la VPC
+│   ├── ecs-cluster-stack.ts ← Stack 2: crea ECS + ALB
+│   └── pipeline-stack.ts    ← Stack 3: crea CodePipeline + CodeBuild
+│
+├── app/
+│   ├── Dockerfile           ← Cómo empaquetar tu app en un container
+│   ├── server.js            ← Tu aplicación (Node.js simple)
+│   └── package.json         ← Dependencias de la app
+│
+├── cdk.json                 ← Configuración de CDK (le dice cómo arrancar)
+├── package.json             ← Dependencias del proyecto CDK (librerías)
+├── tsconfig.json            ← Configuración de TypeScript
+└── .gitignore
+```
+
+### ¿Qué hace cada archivo?
+
+| Archivo | Para qué sirve | Cuándo lo tocas |
+|---------|----------------|-----------------|
+| `cdk.json` | Le dice a CDK cuál es el entry point (`bin/app.ts`) | Casi nunca |
+| `package.json` | Lista las librerías de CDK que necesitas | Cuando agregas un servicio nuevo |
+| `tsconfig.json` | Configuración del compilador TypeScript | Nunca |
+| `bin/app.ts` | Define QUÉ stacks crear y en qué orden | Cuando agregas un stack nuevo |
+| `lib/*.ts` | Los stacks (la infraestructura real) | Donde trabajas el 90% del tiempo |
+| `app/` | Tu aplicación (lo que corre en el container) | Cuando cambias tu app |
+
+### ¿Cómo funciona el flujo de CDK?
+
+```
+Tú escribes TypeScript (lib/*.ts)
+        │
+        ▼
+CDK lo compila y genera CloudFormation templates (JSON)
+        │
+        ▼
+CDK envía los templates a AWS CloudFormation
+        │
+        ▼
+CloudFormation crea los recursos en AWS
+```
+
+Es decir: **CDK es un generador de CloudFormation**. Tú escribes TypeScript
+(más fácil) y CDK lo traduce a CloudFormation (que AWS entiende).
+
+### ¿Dónde abro el terminal?
+
+**SIEMPRE en la raíz del proyecto** (`cdk-ecs-deployment/`):
+
+```bash
+# Si estás en otro lado:
+cd cdk-ecs-deployment/
+
+# Todos los comandos CDK se ejecutan desde aquí:
+cdk diff        # Ver qué va a crear
+cdk deploy      # Crear la infraestructura
+cdk destroy     # Eliminar todo
+```
+
+### ¿Qué hace `cdk.json`?
+
+```json
+{
+  "app": "npx ts-node --prefer-ts-exts bin/app.ts"
+}
+```
+
+Le dice a CDK: "para generar la infraestructura, ejecuta `bin/app.ts` con ts-node".
+Es como el `main()` de un programa.
+
+### ¿Qué hace `bin/app.ts`?
+
+```typescript
+const app = new cdk.App();                              // Crear la "aplicación CDK"
+
+const networkStack = new NetworkStack(app, 'NetworkStack', { env });  // Stack 1
+const ecsStack = new EcsClusterStack(app, 'EcsClusterStack', {       // Stack 2
+  env,
+  vpc: networkStack.vpc,   // ← Usa la VPC del stack 1
+});
+new PipelineStack(app, 'PipelineStack', {                            // Stack 3
+  env,
+  ecsService: ecsStack.service,  // ← Usa el servicio del stack 2
+});
+```
+
+Esto define 3 stacks y sus dependencias. CDK sabe que debe crear NetworkStack
+primero (porque EcsClusterStack necesita su VPC).
+
+### ¿Qué hace `package.json`?
+
+```json
+{
+  "dependencies": {
+    "aws-cdk-lib": "^2.130.0",    // La librería principal de CDK
+    "constructs": "^10.3.0"        // Base para los constructs
+  },
+  "devDependencies": {
+    "typescript": "~5.4.0",        // Compilador TypeScript
+    "aws-cdk": "^2.130.0"         // CLI de CDK (también se instala global)
+  }
+}
+```
+
+`npm install` descarga estas librerías a `node_modules/`.
+
+### Comandos CDK que vas a usar
+
+| Comando | Qué hace | Equivalente en Terraform |
+|---------|----------|--------------------------|
+| `cdk bootstrap` | Crea bucket S3 + roles IAM (solo 1 vez) | No tiene equivalente |
+| `cdk synth` | Genera los templates CloudFormation (sin crear nada) | `terraform validate` |
+| `cdk diff` | Muestra qué va a crear/cambiar/eliminar | `terraform plan` |
+| `cdk deploy` | Crea/actualiza la infraestructura | `terraform apply` |
+| `cdk deploy --all` | Despliega TODOS los stacks | `terraform apply` (todo) |
+| `cdk destroy` | Elimina todo | `terraform destroy` |
+| `cdk list` | Lista los stacks definidos | - |
+
+---
+
+## Paso 4: Instalar herramientas
 
 ```bash
 # Node.js (CDK está escrito en Node)
@@ -141,7 +271,7 @@ Si no tienes Node.js: https://nodejs.org/ (descarga la versión LTS)
 
 ---
 
-## Paso 4: Instalar dependencias del proyecto
+## Paso 5: Instalar dependencias del proyecto
 
 ```bash
 cd cdk-ecs-deployment/
@@ -152,7 +282,7 @@ Esto descarga las librerías de CDK (`aws-cdk-lib`, `constructs`) definidas en `
 
 ---
 
-## Paso 5: Bootstrap CDK (solo la primera vez)
+## Paso 6: Bootstrap CDK (solo la primera vez)
 
 CDK necesita un bucket S3 y roles IAM para funcionar. El bootstrap los crea:
 
@@ -169,7 +299,7 @@ cdk bootstrap aws://$ACCOUNT_ID/us-east-1
 
 ---
 
-## Paso 6: Entender la app de ejemplo
+## Paso 7: Entender la app de ejemplo
 
 Antes de desplegar la infra, mira qué app vamos a containerizar.
 
@@ -227,7 +357,7 @@ CMD ["node", "server.js"]
 
 ---
 
-## Paso 7: Probar la app localmente con Docker
+## Paso 8: Probar la app localmente con Docker
 
 ```bash
 cd app/
@@ -254,7 +384,7 @@ Si funciona localmente, va a funcionar en ECS.
 
 ---
 
-## Paso 8: Entender los Stacks de CDK
+## Paso 9: Entender los Stacks de CDK
 
 Abre los archivos en `lib/` y lee los comentarios. Resumen:
 
@@ -302,7 +432,7 @@ Crea:
 
 ---
 
-## Paso 9: Crear el token de GitHub para CodePipeline
+## Paso 10: Crear el token de GitHub para CodePipeline
 
 CodePipeline necesita acceso a tu repo de GitHub. Hay que crear un token y guardarlo en AWS Secrets Manager:
 
@@ -326,7 +456,7 @@ aws secretsmanager create-secret \
 
 ---
 
-## Paso 10: Configurar tu usuario de GitHub en el código
+## Paso 11: Configurar tu usuario de GitHub en el código
 
 Edita `lib/pipeline-stack.ts` y cambia:
 
@@ -337,7 +467,7 @@ repo: 'cdk-ecs-deployment',   // ← Nombre del repo
 
 ---
 
-## Paso 11: Desplegar la infraestructura
+## Paso 12: Desplegar la infraestructura
 
 ```bash
 # Ver qué va a crear (como terraform plan)
@@ -360,7 +490,7 @@ PipelineStack.EcrRepoUri = 123456789.dkr.ecr.us-east-1.amazonaws.com/web-app
 
 ---
 
-## Paso 12: Probar la app desplegada
+## Paso 13: Probar la app desplegada
 
 ```bash
 # Copiar la URL del ALB del output anterior
@@ -373,7 +503,7 @@ Debe responder con el JSON de la app. También puedes abrirlo en el navegador.
 
 ---
 
-## Paso 13: Buildear y pushear tu imagen a ECR manualmente (primera vez)
+## Paso 14: Buildear y pushear tu imagen a ECR manualmente (primera vez)
 
 La primera vez necesitas pushear una imagen manualmente porque el pipeline
 todavía no ha corrido:
@@ -404,7 +534,7 @@ curl http://xxxxx.us-east-1.elb.amazonaws.com
 
 ---
 
-## Paso 14: Probar el pipeline (CI/CD automático)
+## Paso 15: Probar el pipeline (CI/CD automático)
 
 Ahora que el pipeline está configurado, cada push a `main` triggerea el deploy:
 
@@ -431,7 +561,7 @@ Puedes ver el progreso en:
 
 ---
 
-## Paso 15: Verificar el Auto Scaling
+## Paso 16: Verificar el Auto Scaling
 
 El servicio tiene auto scaling configurado (2-6 tasks según CPU):
 
