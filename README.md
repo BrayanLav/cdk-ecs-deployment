@@ -256,8 +256,15 @@ primero (porque EcsClusterStack necesita su VPC).
 # Node.js (CDK está escrito en Node)
 node --version  # Necesitas >= 18
 
+# pnpm (gestor de paquetes seguro - reemplaza a npm)
+# ¿Por qué pnpm y no npm? npm tuvo ataques masivos de supply chain en 2025.
+# pnpm aísla dependencias estrictamente: un paquete malicioso no puede
+# acceder a dependencias que no declaró explícitamente.
+npm install -g pnpm
+pnpm --version
+
 # AWS CDK CLI
-npm install -g aws-cdk
+pnpm add -g aws-cdk
 cdk --version   # Debe mostrar 2.x
 
 # Docker (para buildear imágenes localmente)
@@ -269,13 +276,20 @@ aws sts get-caller-identity
 
 Si no tienes Node.js: https://nodejs.org/ (descarga la versión LTS)
 
+> **🏆 Buena práctica: Usar pnpm en vez de npm.**
+>
+> npm permite que cualquier paquete acceda a TODAS las dependencias del proyecto
+> (incluso las que no declaró). Esto permite ataques de supply chain donde un
+> paquete malicioso roba credenciales de otro paquete. pnpm bloquea esto por diseño.
+> Además es 3x más rápido y usa menos disco.
+
 ---
 
 ## Paso 5: Instalar dependencias del proyecto
 
 ```bash
 cd cdk-ecs-deployment/
-npm install
+pnpm install
 ```
 
 Esto descarga las librerías de CDK (`aws-cdk-lib`, `constructs`) definidas en `package.json`.
